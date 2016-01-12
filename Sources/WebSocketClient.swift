@@ -25,10 +25,18 @@
 import Core
 import HTTP
 
-public extension Request {
+public extension Response {
+	public func getHeader(header: String) -> String? {
+		for (key, value) in headers where key.lowercaseString == header.lowercaseString {
+			return value
+		}
+		return nil
+	}
+
 	public var isWebSocket: Bool {
-		if let connection = getHeader("connection"), upgrade = getHeader("upgrade"), version = getHeader("sec-websocket-version"), _ = getHeader("sec-websocket-key")
-			where connection.lowercaseString == "upgrade" && upgrade.lowercaseString == "websocket" && version == "13" {
+		// TODO: Fail if extensions in the response that weren't in the request
+		if let connection = getHeader("connection"), upgrade = getHeader("upgrade"), _ = getHeader("sec-websocket-accept")
+			where statusCode == 101 && connection.lowercaseString == "upgrade" && upgrade.lowercaseString == "websocket" {
 				return true
 		} else {
 			return false
@@ -36,43 +44,27 @@ public extension Request {
 	}
 }
 
-public class WebSocketServer: ContextResponderType {
+public typealias ResponsePair = (Response, StreamType)
+public class WebSocketClient {
 	private var sockets: [WebSocket] = []
 	private let websocketHandler: WebSocket -> Void
+	public let wsKey = Base64.encode(Data(bytes: [0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5])).string!
 
 	public init(websocketHandler: WebSocket -> Void) {
 		self.websocketHandler =  websocketHandler
 	}
 
-	public func respond(context: Context) {
-		guard context.request.isWebSocket else {
-			return context.respond(Response(status: .BadRequest))
-		}
+	public func handleResponse(responsePair: ResponsePair) {
+		let (response, stream) = responsePair
+		guard response.isWebSocket else { return }
+		guard let acceptKey = response.getHeader("sec-websocket-accept") where acceptKey == Base64.encode(Data(uBytes: SHA1.bytes(wsKey + WebSocket.KeyGuid))).string else { return }
 
-		guard let wsKey = context.request.getHeader("sec-websocket-key") else {
-			return context.respond(Response(status: .BadRequest))
+		do {
+			let socket = WebSocket(stream: stream, mode: .Client)
+			self.sockets.append(socket)
+			self.websocketHandler(socket)
+		} catch {
+			print("upgrade error: \(error)")
 		}
-
-		guard let acceptKey = Base64.encode(Data(uBytes: SHA1.bytes(wsKey + WebSocket.KeyGuid))).string else {
-			return context.respond(Response(status: .InternalServerError))
-		}
-		
-		let headers = [
-			"Connection": "Upgrade",
-			"Upgrade": "websocket",
-			"Sec-WebSocket-Accept": acceptKey
-		]
-		let response = Response(status: .SwitchingProtocols, headers: headers)
-		
-		context.upgrade(response) { streamResult in
-			do {
-				let stream = try streamResult()
-				let socket = WebSocket(stream: stream)
-				self.sockets.append(socket)
-				self.websocketHandler(socket)
-			} catch {
-				print("upgrade error: \(error)")
-			}
-		}
-    }
+	}
 }

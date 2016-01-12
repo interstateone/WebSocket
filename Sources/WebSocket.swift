@@ -57,8 +57,7 @@ public class WebSocket {
 		case NoFrame
 	}
 
-	public let mode: WebSocketMode = .Server
-	public let context: Context
+	public let mode: WebSocketMode
 	private let stream: StreamType
 	private var state: State = .Header
 	private var closeState: CloseState = .Open
@@ -69,19 +68,15 @@ public class WebSocket {
 	private var frames: [WebSocketFrame] = []
 	private var buffer: [UInt8] = []
 
-	public var request: Request {
-		return self.context.request
-	}
-
 	private var listener: (WebSocketEvent -> Void)?
 
 	public func listen(listener: WebSocketEvent -> Void) {
 		self.listener = listener
 	}
 
-	public init(context: Context, stream: StreamType) {
-		self.context = context
+	public init(stream: StreamType, mode: WebSocketMode = .Server) {
 		self.stream = stream
+		self.mode = mode
 
 		stream.receive { result in
 			do {
