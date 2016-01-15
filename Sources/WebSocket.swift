@@ -289,7 +289,7 @@ public class WebSocket {
 	}
 
 	private func send(opCode: WebSocketFrame.OpCode, data: [UInt8], completion: (ErrorType? -> Void)? = nil) {
-		let frame = WebSocketFrame(opCode: opCode, data: data)
+		let frame = WebSocketFrame(opCode: opCode, masked: mode == .Client, data: data)
 		let data = frame.getData()
 		self.stream.send(unsafeBitCast(data, [Int8].self)) { sendResult in
 			do {

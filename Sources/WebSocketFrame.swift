@@ -41,6 +41,8 @@
 //	|                     Payload Data continued ...                |
 //	+---------------------------------------------------------------+
 
+import Darwin
+
 internal struct WebSocketFrame {
 
 	internal static let FinMask			: UInt8 = 0b10000000
@@ -93,20 +95,20 @@ internal struct WebSocketFrame {
 		self.headerExtraLength = headerExtraLength
 	}
 
-	init(fin: Bool = true, rsv1: Bool = false, rsv2: Bool = false, rsv3: Bool = false, opCode: OpCode, data: [UInt8] = []) {
+	init(fin: Bool = true, rsv1: Bool = false, rsv2: Bool = false, rsv3: Bool = false, opCode: OpCode, masked: Bool = false, data: [UInt8] = []) {
 		self.fin = fin
 		self.rsv1 = rsv1
 		self.rsv2 = rsv2
 		self.rsv3 = rsv3
 		self.opCode = opCode
-		self.masked = false
+		self.masked = masked
 		self.data = data
 		self.payloadLength = UInt64(data.count)
 
 		self.payloadRemainingLength = 0
 		self.headerExtraLength = 0
-		self.maskKey = nil
-	}
+        self.maskKey = masked ? [UInt8(rand() & 0xFF), UInt8(rand() & 0xFF), UInt8(rand() & 0xFF), UInt8(rand() & 0xFF)] : nil
+    }
 
 	func getData() -> [UInt8] {
 		var data: [UInt8] = []
@@ -129,7 +131,18 @@ internal struct WebSocketFrame {
 			data += UInt16(payloadLength).bytes()
 		}
 
-		data += self.data
+        if let maskKey = maskKey where masked {
+            data += maskKey
+
+            for index in 0..<self.data.count {
+                // Mask each byte by XORing with the appropriate byte from the mask
+                let maskedByte = self.data[index] ^ maskKey[index % sizeof(UInt32)]
+                data.append(maskedByte)
+            }
+        }
+        else {
+            data += self.data
+        }
 
 		return data
 	}
