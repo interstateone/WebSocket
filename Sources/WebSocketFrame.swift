@@ -41,7 +41,11 @@
 //	|                     Payload Data continued ...                |
 //	+---------------------------------------------------------------+
 
+#if os(Linux)
+import Glibc
+#else
 import Darwin
+#endif
 
 internal struct WebSocketFrame {
 
